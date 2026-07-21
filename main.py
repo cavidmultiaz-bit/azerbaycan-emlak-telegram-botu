@@ -314,6 +314,65 @@ def search_bina_az(params: PropertySearchParams) -> list[Listing]:
     return listings
 
 
+# --- PORTAL URL BUILDERS & SLUG MAPS ---
+BINA_SLUG_MAP = {
+    "28 May": "28-may", "Gənclik": "genclik", "Nəriman Nərimanov": "nerimanov",
+    "Əhmədli": "ehmedli", "Neftçilər": "neftciler", "Qara Qarayev": "qara-qarayev",
+    "Koroğlu": "koroglu", "Ulduz": "ulduz", "Həzi Aslanov": "hezi-aslanov",
+    "Xalqlar Dostluğu": "xalqlar-dostlugu", "Nizami": "nizami",
+    "Elmlər Akademiyası": "elmler-akademiyasi", "İnşaatçılar": "insaatcilar",
+    "20 Yanvar": "20-yanvar", "Memar Əcəmi": "memar-ecemi", "Nəsimi": "nesimi",
+    "Azadlıq Prospekti": "azadliq-prospekti", "Cəfər Cabbarlı": "cefer-cabbarli",
+    "Xətai": "xetai", "Sahil": "sahil", "İçəri Şəhər": "iceri-seher",
+    "Bakmil": "bakmil", "Dərnəgül": "dernegul", "Avtovağzal": "avtovagzal",
+    "8 Noyabr": "8-noyabr", "Xocəsən": "xocesen",
+    # Districts
+    "Yasamal": "yasamal", " Binəqədi": "bineqedi", "Sabunçu": "sabuncu",
+    "Suraxanı": "suraxani", "Qaradağ": "qaradag", "Səbail": "sebail",
+    "Xəzər": "xezer", "Xırdalan": "xirdalan"
+}
+
+def build_bina_url(params: PropertySearchParams) -> str:
+    location_slug = BINA_SLUG_MAP.get(params.metro_station or params.city_region or "", "")
+    intent_path = "kiraye/menziller" if params.intent == "kiraye" else "alqi-satqi/menziller"
+    
+    if location_slug:
+        url = f"https://bina.az/baki/{location_slug}/{intent_path}"
+    else:
+        url = f"https://bina.az/{intent_path}"
+        
+    if params.rooms:
+        url += f"/{params.rooms}-otaqli"
+        
+    query_params = []
+    if params.max_price:
+        query_params.append(f"price_to={int(params.max_price)}")
+    if not location_slug and params.raw_query:
+        query_params.append(f"q={urllib.parse.quote(params.raw_query)}")
+        
+    if query_params:
+        url += "?" + "&".join(query_params)
+    return url
+
+def build_tap_url(params: PropertySearchParams) -> str:
+    p740 = "3724" if params.intent == "kiraye" else "3722"
+    query_str = urllib.parse.quote(params.metro_station or params.city_region or params.raw_query or "mənzil")
+    return f"https://tap.az/elanlar/dasinmaz-emlak/menziller?q%5Bkeywords%5D={query_str}&p%5B740%5D={p740}"
+
+def build_yeniemlak_url(params: PropertySearchParams) -> str:
+    elan_nov = 2 if params.intent == "kiraye" else 1
+    metro_id = YENIEMLAK_METRO_MAP.get(params.metro_station)
+    url = f"https://yeniemlak.az/elan/axtar?elan_nov={elan_nov}&emlak=1&seher%5B%5D=7"
+    if metro_id:
+        url += f"&metro%5B%5D={metro_id}"
+    if params.rooms:
+        url += f"&otaq={params.rooms}"
+    if params.max_price:
+        url += f"&qiymet2={int(params.max_price)}"
+    if not metro_id and params.raw_query:
+        url += f"&keyword={urllib.parse.quote(params.raw_query)}"
+    return url
+
 # --- YENIEMLAK METRO MAP ---
 YENIEMLAK_METRO_MAP = {
     "Həzi Aslanov": 1, "Əhmədli": 2, "Xalqlar Dostluğu": 3, "Neftçilər": 4, "Qara Qarayev": 5,
@@ -328,29 +387,15 @@ def search_yeniemlak_az(params: PropertySearchParams) -> list[Listing]:
     headers = DEFAULT_HEADERS.copy()
     headers["Referer"] = "https://yeniemlak.az/"
 
-    # Try precise parameters first
+    url_primary = build_yeniemlak_url(params)
+    urls_to_try = [url_primary]
+
     metro_id = YENIEMLAK_METRO_MAP.get(params.metro_station) if params.metro_station else None
-    elan_nov = 2 if params.intent == "kiraye" else (1 if params.intent == "satiliq" else None)
+    elan_nov = 2 if params.intent == "kiraye" else 1
 
-    urls_to_try = []
     if metro_id:
-        u = f"https://yeniemlak.az/elan/axtar?metro%5B%5D={metro_id}"
-        if elan_nov: u += f"&elan_nov={elan_nov}"
-        if params.rooms: u += f"&otaq={params.rooms}"
-        if params.max_price: u += f"&qiymet2={int(params.max_price)}"
-        urls_to_try.append(u)
-        
-        # Fallback 1: Metro without max price restriction
-        u_broad = f"https://yeniemlak.az/elan/axtar?metro%5B%5D={metro_id}"
-        if elan_nov: u_broad += f"&elan_nov={elan_nov}"
-        urls_to_try.append(u_broad)
-
-    # Keyword search fallback
-    search_query = _build_search_query(params)
-    encoded = urllib.parse.quote(search_query)
-    kw_url = f"https://yeniemlak.az/elan/axtar?keyword={encoded}"
-    if elan_nov: kw_url += f"&elan_nov={elan_nov}"
-    urls_to_try.append(kw_url)
+        # Broad fallback 1
+        urls_to_try.append(f"https://yeniemlak.az/elan/axtar?elan_nov={elan_nov}&emlak=1&seher%5B%5D=7&metro%5B%5D={metro_id}")
 
     seen_urls = set()
     try:
@@ -394,12 +439,6 @@ def search_yeniemlak_az(params: PropertySearchParams) -> list[Listing]:
                         image_url = src if src.startswith("http") else f"https://yeniemlak.az{src}"
 
                     location_str = params.metro_station or params.city_region or "Bakı"
-                    if "nerimanov" in href.lower(): location_str = "Nəriman Nərimanov m."
-                    elif "28-may" in href.lower(): location_str = "28 May m."
-                    elif "genclik" in href.lower(): location_str = "Gənclik m."
-                    elif "ehmedli" in href.lower(): location_str = "Əhmədli m."
-                    elif "neftciler" in href.lower(): location_str = "Neftçilər m."
-
                     title_str = f"{tip_str} {rooms_found or ''} {emlak_str}".strip()
 
                     listings.append(Listing(
@@ -705,11 +744,10 @@ async def process_search_query(update: Update, user_text: str):
     await update.message.reply_chat_action(action=ChatAction.TYPING)
     listings = fetch_all_listings(params)
 
-    # Build direct search links for user convenience
-    query_str = urllib.parse.quote(params.metro_station or params.city_region or params.raw_query or user_text)
-    bina_link = f"https://bina.az/items?q={query_str}"
-    tap_link = f"https://tap.az/elanlar/emlak?q%5Bkeywords%5D={query_str}"
-    yeniemlak_link = f"https://yeniemlak.az/elan/axtar?keyword={query_str}"
+    # Build exact direct search links for user convenience
+    bina_link = build_bina_url(params)
+    tap_link = build_tap_url(params)
+    yeniemlak_link = build_yeniemlak_url(params)
 
     portal_links_html = (
         f"\n🌐 <b>Portallarda canlı axtarış keçidləri:</b>\n"
