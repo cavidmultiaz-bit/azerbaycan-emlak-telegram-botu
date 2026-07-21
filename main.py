@@ -175,7 +175,7 @@ DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "az,tr-TR;q=0.9,tr;q=0.8,en-US;q=0.7,en;q=0.6",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Encoding": "gzip, deflate",
     "Cache-Control": "max-age=0",
     "Sec-Ch-Ua": '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="99"',
     "Sec-Ch-Ua-Mobile": "?0",
@@ -210,13 +210,9 @@ def _build_search_query(params: PropertySearchParams) -> str:
 
 
 def search_tap_az(params: PropertySearchParams) -> list[Listing]:
+    """tap.az - uses p[740]=3724 for rent, p[740]=3722 for sale."""
     listings = []
-    search_query = _build_search_query(params)
-    encoded = urllib.parse.quote(search_query)
-
-    # tap.az category-based URL for better results
-    category = "dasinmaz-emlak-kiraye-evler" if params.intent == "kiraye" else "dasinmaz-emlak-satilan-evler" if params.intent == "satiliq" else "dasinmaz-emlak"
-    url = f"https://tap.az/elanlar/{category}?q%5Bkeywords%5D={encoded}"
+    url = build_tap_url(params)
 
     headers = DEFAULT_HEADERS.copy()
     headers["Referer"] = "https://tap.az/"
@@ -224,7 +220,7 @@ def search_tap_az(params: PropertySearchParams) -> list[Listing]:
     try:
         with httpx.Client(headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
             resp = client.get(url)
-            logger.info(f"tap.az status: {resp.status_code}")
+            logger.info(f"tap.az status: {resp.status_code} for {url}")
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 # Multiple selector strategies
@@ -258,14 +254,9 @@ def search_tap_az(params: PropertySearchParams) -> list[Listing]:
 
 
 def search_bina_az(params: PropertySearchParams) -> list[Listing]:
-    """bina.az - one of the largest real estate portals in Azerbaijan."""
+    """bina.az - uses structured URLs like /baki/28-may/kiraye/menziller/2-otaqli"""
     listings = []
-    search_query = _build_search_query(params)
-    encoded = urllib.parse.quote(search_query)
-
-    # Build bina.az URL with filters
-    intent_path = "kiraye/menziller" if params.intent == "kiraye" else "alqi-satqi/menziller" if params.intent == "satiliq" else "items"
-    url = f"https://bina.az/{intent_path}?q={encoded}"
+    url = build_bina_url(params)
 
     headers = DEFAULT_HEADERS.copy()
     headers["Referer"] = "https://bina.az/"
@@ -273,7 +264,7 @@ def search_bina_az(params: PropertySearchParams) -> list[Listing]:
     try:
         with httpx.Client(headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
             resp = client.get(url)
-            logger.info(f"bina.az status: {resp.status_code}")
+            logger.info(f"bina.az status: {resp.status_code} for {url}")
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 # bina.az uses .items-i cards
