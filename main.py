@@ -750,8 +750,8 @@ def format_listing_message(listing: Listing) -> str:
     msg += f"📍 <b>Ünvan:</b> {listing.location}\n"
     if listing.rooms:
         msg += f"🚪 <b>Otaq:</b> {listing.rooms}\n"
-    msg += f"🌐 <b>Mənbə:</b> {source_badge}\n"
-    msg += f"🔗 <a href='{listing.url}'>İlana saytda baxmaq üçün toxunun</a>"
+    msg += f"🌐 <b>Mənbə:</b> {source_badge}\n\n"
+    msg += f"🔗 <b>İlanın fərdi keçid linki:</b>\n{listing.url}"
     return msg
 
 
