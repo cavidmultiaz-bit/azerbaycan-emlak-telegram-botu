@@ -30,7 +30,7 @@ load_dotenv(BASE_DIR / ".env")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-MAX_RESULTS_PER_SITE = int(os.getenv("MAX_RESULTS_PER_SITE", "5"))
+MAX_RESULTS_PER_SITE = int(os.getenv("MAX_RESULTS_PER_SITE", "20"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "15"))
 TEMP_AUDIO_DIR = BASE_DIR / "temp_audio"
 
@@ -70,81 +70,57 @@ METRO_ALIASES = {
     "ehmedliye": "Əhmədli", "ahmedli": "Əhmədli",
     # Həzi Aslanov
     "hezi aslanov": "Həzi Aslanov", "həzi aslanov": "Həzi Aslanov",
-    "hezi aslanovda": "Həzi Aslanov", "həzi aslanovda": "Həzi Aslanov",
+    "hezi aslanovda": "Həzi Aslanov", "aslanov": "Həzi Aslanov",
     # Cəfər Cabbarlı
     "cefer cabbarli": "Cəfər Cabbarlı", "cəfər cabbarlı": "Cəfər Cabbarlı",
-    "cefer cabbarlıya": "Cəfər Cabbarlı", "cəfər cabbarlıya": "Cəfər Cabbarlı",
-    "cabbarli": "Cəfər Cabbarlı", "cabbarlı": "Cəfər Cabbarlı",
     # Nizami
-    "nizami": "Nizami", "nizamidə": "Nizami", "nizamide": "Nizami",
+    "nizami": "Nizami", "nizamida": "Nizami", "nizamidə": "Nizami", "nizamiyə": "Nizami",
     # Elmlər Akademiyası
     "elmler": "Elmlər Akademiyası", "elmlər": "Elmlər Akademiyası",
     "elmler akademiyasi": "Elmlər Akademiyası", "elmlər akademiyası": "Elmlər Akademiyası",
-    "elmlərdə": "Elmlər Akademiyası", "elmlerde": "Elmlər Akademiyası",
+    "elmlerde": "Elmlər Akademiyası", "elmlərdə": "Elmlər Akademiyası",
     # İnşaatçılar
     "insaatcilar": "İnşaatçılar", "inşaatçılar": "İnşaatçılar",
-    "insaatcilara": "İnşaatçılar", "inşaatçılara": "İnşaatçılar",
+    "insaatcilarda": "İnşaatçılar", "inşaatçılarda": "İnşaatçılar",
     # 20 Yanvar
-    "20 yanvar": "20 Yanvar", "20 yanvarda": "20 Yanvar", "iyirmi yanvar": "20 Yanvar",
+    "20 yanvar": "20 Yanvar", "iyirmi yanvar": "20 Yanvar", "20yanvar": "20 Yanvar",
     # Memar Əcəmi
     "memar ecemi": "Memar Əcəmi", "memar əcəmi": "Memar Əcəmi",
-    "məmər əcəmi": "Memar Əcəmi", "memar acemi": "Memar Əcəmi",
-    "memar ejemi": "Memar Əcəmi",
+    "ecemi": "Memar Əcəmi", "əcəmi": "Memar Əcəmi", "ecemide": "Memar Əcəmi",
     # Nəsimi
-    "nesimi": "Nəsimi", "nəsimi": "Nəsimi", "nəsimidə": "Nəsimi", "nesimide": "Nəsimi",
+    "nesimi": "Nəsimi", "nəsimi": "Nəsimi", "nesimide": "Nəsimi",
     # Azadlıq Prospekti
     "azadliq": "Azadlıq Prospekti", "azadlıq": "Azadlıq Prospekti",
-    "azadlıqda": "Azadlıq Prospekti", "azadliqda": "Azadlıq Prospekti",
     "azadliq prospekti": "Azadlıq Prospekti", "azadlıq prospekti": "Azadlıq Prospekti",
     # Dərnəgül
-    "dernegul": "Dərnəgül", "dərnəgül": "Dərnəgül",
-    "dərnəgüldə": "Dərnəgül", "dernegulde": "Dərnəgül",
+    "dernegul": "Dərnəgül", "dərnəgül": "Dərnəgül", "dernegulde": "Dərnəgül",
     # 8 Noyabr
-    "8 noyabr": "8 Noyabr", "8 noyabrda": "8 Noyabr", "sekkiz noyabr": "8 Noyabr",
-    # Xocəsən
-    "xocesen": "Xocəsən", "xocəsən": "Xocəsən",
-    "xocəsəndə": "Xocəsən", "xocesende": "Xocəsən",
+    "8 noyabr": "8 Noyabr", "sekiz noyabr": "8 Noyabr",
     # Avtovağzal
     "avtovagzal": "Avtovağzal", "avtovağzal": "Avtovağzal",
-    # Hərbə-Zorba (Hal)
-    "hal": "Hal", "halda": "Hal",
+    # Xocəsən
+    "xocesen": "Xocəsən", "xocəsən": "Xocəsən",
+    # Xətai
+    "xetai": "Xətai", "xətai": "Xətai", "xetaide": "Xətai", "xətaidə": "Xətai",
 }
 
-def normalize_metro(text: str) -> str:
-    """Normalizes metro station names in user text.
-    Cleans suffixes like 'metrosu', 'metro', 'metroya yaxin' etc. first,
-    then looks up the cleaned term in the alias map.
-    Returns the canonical metro name or None."""
-    cleaned = text.lower().strip()
-    # Remove metro-related suffixes
-    metro_suffixes = [
-        "metrosuna yaxın", "metrosuna yaxin", "metroya yaxın", "metroya yaxin",
-        "metro yaxınlığı", "metro yaxinligi", "metrosu yaxınlığı",
-        "metrosu", "metrosuna", "metro", "m/st", "m.",
-        "yaxınlığında", "yaxinliginda", "yaxın", "yaxin",
-        "yaxınlığı", "yaxinligi",
-    ]
-    for suffix in metro_suffixes:
-        cleaned = cleaned.replace(suffix, "").strip()
 
-    # Remove trailing locative suffixes: -da, -də, -a, -ə, -dan, -dən
-    cleaned = re.sub(r'(da|də|dan|dən)$', '', cleaned).strip()
-
-    if cleaned in METRO_ALIASES:
-        return METRO_ALIASES[cleaned]
-    # Try partial match
-    for alias, canonical in METRO_ALIASES.items():
-        if alias in cleaned or cleaned in alias:
+def normalize_metro(text: str) -> str | None:
+    """Detects and returns canonical Baku metro station name from input text."""
+    text_lower = text.lower()
+    # Sort by key length descending to match multi-word phrases first
+    for alias, canonical in sorted(METRO_ALIASES.items(), key=lambda x: len(x[0]), reverse=True):
+        pattern = r'\b' + re.escape(alias) + r'\b'
+        if re.search(pattern, text_lower):
             return canonical
     return None
 
 
 def preprocess_user_text(text: str) -> str:
-    """Preprocesses user text: detects metro references and normalizes them."""
-    metro = normalize_metro(text)
-    if metro:
-        # Inject canonical metro name into text for better LLM + scraper results
-        return f"{text} ({metro} metrosuna yaxın)"
+    """Preprocesses user text by appending canonical metro station if alias detected."""
+    canonical = normalize_metro(text)
+    if canonical and canonical.lower() not in text.lower():
+        return f"{text} ({canonical} metrosu)"
     return text
 
 
@@ -210,7 +186,7 @@ def _build_search_query(params: PropertySearchParams) -> str:
 
 
 def search_tap_az(params: PropertySearchParams) -> list[Listing]:
-    """tap.az - uses p[740]=3724 for rent, p[740]=3722 for sale."""
+    """tap.az - parses individual items from search results page."""
     listings = []
     url = build_tap_url(params)
 
@@ -223,83 +199,157 @@ def search_tap_az(params: PropertySearchParams) -> list[Listing]:
             logger.info(f"tap.az status: {resp.status_code} for {url}")
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
-                # Multiple selector strategies
-                items = soup.select(".products-i") or soup.select("article") or soup.select(".product-card")
-                for item in items[:MAX_RESULTS_PER_SITE]:
-                    link_el = item.select_one("a[href*='/elanlar/']") or item.select_one("a.products-i__link") or item.select_one("a")
-                    title_el = item.select_one(".products-i__name") or item.select_one("h3") or item.select_one(".title")
-                    price_el = item.select_one(".price-val") or item.select_one(".price")
-                    img_el = item.select_one("img")
-                    city_el = item.select_one(".products-i__datetime") or item.select_one(".location")
-                    if not link_el: continue
+                items = soup.select(".products-i") or soup.select(".product-card") or soup.select("[data-testid='ad-card']")
+                seen_urls = set()
 
-                    href = link_el.get("href", "")
-                    item_url = href if href.startswith("http") else f"https://tap.az{href}"
-                    title = (title_el.get_text(strip=True) if title_el else link_el.get_text(strip=True)) or "Tap.az Elanı"
-                    if len(title) < 3: continue
-                    price = (price_el.get_text(strip=True) + " AZN" if price_el else "Qiymət yoxdur")
-                    image_url = None
-                    if img_el:
-                        image_url = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy")
-                    location = (city_el.get_text(strip=True) if city_el else params.city_region or params.metro_station or "Bakı")
+                if items:
+                    for item in items[:MAX_RESULTS_PER_SITE]:
+                        link_el = item.select_one("a[href*='/elanlar/']") or item.select_one("a.products-i__link") or item.select_one("a")
+                        title_el = item.select_one(".products-i__name") or item.select_one("h3") or item.select_one(".title")
+                        price_el = item.select_one(".price-val") or item.select_one(".price")
+                        img_el = item.select_one("img")
+                        city_el = item.select_one(".products-i__datetime") or item.select_one(".location")
+                        if not link_el: continue
 
-                    listings.append(Listing(
-                        title=title, price=price, location=location,
-                        rooms=f"{params.rooms} otaqlı" if params.rooms else None,
-                        url=item_url, image_url=image_url, source="tap.az"
-                    ))
+                        href = link_el.get("href", "")
+                        item_url = href if href.startswith("http") else f"https://tap.az{href}"
+                        if item_url in seen_urls: continue
+                        seen_urls.add(item_url)
+
+                        title = (title_el.get_text(strip=True) if title_el else link_el.get_text(strip=True)) or (img_el.get("title") or img_el.get("alt") if img_el else "Tap.az Elanı")
+                        if len(title) < 3: continue
+                        price = (price_el.get_text(strip=True) + " AZN" if price_el else "Qiymət yoxdur")
+                        image_url = None
+                        if img_el:
+                            image_url = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy")
+                        location = (city_el.get_text(strip=True) if city_el else params.city_region or params.metro_station or "Bakı")
+
+                        listings.append(Listing(
+                            title=title, price=price, location=location,
+                            rooms=f"{params.rooms} otaqlı" if params.rooms else None,
+                            url=item_url, image_url=image_url, source="tap.az"
+                        ))
+
+                # Regex fallback for direct links /elanlar/dasinmaz-emlak/.../{id}
+                if len(listings) < 5:
+                    html_text = resp.text
+                    regex_matches = re.findall(r'href=["\'](/elanlar/dasinmaz-emlak/[^"\'\s>]+/\d+)["\']', html_text)
+                    for href in regex_matches:
+                        item_url = f"https://tap.az{href}"
+                        if item_url in seen_urls: continue
+                        seen_urls.add(item_url)
+
+                        idx = html_text.find(href)
+                        snippet = html_text[max(0, idx - 100):min(len(html_text), idx + 800)]
+                        title_match = re.search(r'(?:title|alt)=["\']([^"\'\s>]+.*?)["\']', snippet)
+                        price_match = re.search(r'(\d+[\d\s]*)\s*(?:AZN|azn|manat)', snippet)
+                        img_match = re.search(r'src=["\'](https://tap\.azstatic\.com/[^"\'\s>]+)["\']', snippet)
+
+                        title_str = title_match.group(1).strip() if title_match else f"Tap.az Elanı №{href.split('/')[-1]}"
+                        price_str = f"{price_match.group(1).strip()} AZN" if price_match else "Qiymət razılaşma ilə"
+                        img_url = img_match.group(1) if img_match else None
+
+                        listings.append(Listing(
+                            title=title_str[:80], price=price_str,
+                            location=params.metro_station or params.city_region or "Bakı",
+                            rooms=f"{params.rooms} otaqlı" if params.rooms else None,
+                            url=item_url, image_url=img_url, source="tap.az"
+                        ))
+                        if len(listings) >= MAX_RESULTS_PER_SITE:
+                            break
     except Exception as e:
         logger.error(f"Error tap.az: {e}")
     return listings
 
 
 def search_bina_az(params: PropertySearchParams) -> list[Listing]:
-    """bina.az - uses structured URLs like /baki/28-may/kiraye/menziller/2-otaqli"""
+    """bina.az - fetches individual items from search query and category URLs."""
     listings = []
-    url = build_bina_url(params)
-
     headers = DEFAULT_HEADERS.copy()
     headers["Referer"] = "https://bina.az/"
 
+    search_query = _build_search_query(params)
+    encoded = urllib.parse.quote(search_query)
+    url_items = f"https://bina.az/items?q={encoded}"
+    url_structured = build_bina_url(params)
+
+    urls_to_try = [url_items, url_structured]
+    seen_urls = set()
+
     try:
         with httpx.Client(headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
-            resp = client.get(url)
-            logger.info(f"bina.az status: {resp.status_code} for {url}")
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                # bina.az uses .items-i cards
+            for url in urls_to_try:
+                if len(listings) >= MAX_RESULTS_PER_SITE:
+                    break
+                resp = client.get(url)
+                logger.info(f"bina.az status: {resp.status_code} for {url}")
+                if resp.status_code != 200:
+                    continue
+
+                html = resp.text
+                soup = BeautifulSoup(html, "html.parser")
                 items = soup.select(".items-i") or soup.select(".listing-card") or soup.select("article")
-                for item in items[:MAX_RESULTS_PER_SITE]:
-                    link_el = item.select_one("a[href*='/items/']") or item.select_one("a")
-                    title_el = item.select_one(".card_params_h") or item.select_one(".name") or item.select_one("h3")
-                    price_el = item.select_one(".price-val") or item.select_one(".price")
-                    img_el = item.select_one("img")
-                    location_el = item.select_one(".card_params_body") or item.select_one(".location")
-                    if not link_el: continue
 
-                    href = link_el.get("href", "")
-                    item_url = href if href.startswith("http") else f"https://bina.az{href}"
-                    title = ""
-                    if title_el:
-                        title = title_el.get_text(strip=True)
-                    if not title:
-                        title = link_el.get_text(strip=True)
-                    if len(title) < 3: title = "Bina.az Elanı"
+                if items:
+                    for item in items:
+                        link_el = item.select_one("a[href*='/items/']") or item.select_one("a")
+                        title_el = item.select_one(".card_params_h") or item.select_one(".name") or item.select_one("h3")
+                        price_el = item.select_one(".price-val") or item.select_one(".price")
+                        img_el = item.select_one("img")
+                        location_el = item.select_one(".card_params_body") or item.select_one(".location")
+                        if not link_el: continue
 
-                    price = (price_el.get_text(strip=True) if price_el else "Qiymət yoxdur")
-                    if "AZN" not in price.upper() and "azn" not in price.lower():
-                        price += " AZN"
+                        href = link_el.get("href", "")
+                        item_url = href if href.startswith("http") else f"https://bina.az{href}"
+                        if item_url in seen_urls: continue
+                        seen_urls.add(item_url)
 
-                    image_url = None
-                    if img_el:
-                        image_url = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy")
-                    location = (location_el.get_text(strip=True) if location_el else params.city_region or params.metro_station or "Bakı")
+                        title = (title_el.get_text(strip=True) if title_el else link_el.get_text(strip=True)) or "Bina.az Elanı"
+                        if len(title) < 3: title = f"Bina.az Elanı №{item_url.split('/')[-1]}"
 
-                    listings.append(Listing(
-                        title=title, price=price, location=location,
-                        rooms=f"{params.rooms} otaqlı" if params.rooms else None,
-                        url=item_url, image_url=image_url, source="bina.az"
-                    ))
+                        price = (price_el.get_text(strip=True) if price_el else "Qiymət yoxdur")
+                        if "AZN" not in price.upper() and "azn" not in price.lower():
+                            price += " AZN"
+
+                        image_url = None
+                        if img_el:
+                            image_url = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy")
+                        location = (location_el.get_text(strip=True) if location_el else params.city_region or params.metro_station or "Bakı")
+
+                        listings.append(Listing(
+                            title=title, price=price, location=location,
+                            rooms=f"{params.rooms} otaqlı" if params.rooms else None,
+                            url=item_url, image_url=image_url, source="bina.az"
+                        ))
+                        if len(listings) >= MAX_RESULTS_PER_SITE:
+                            break
+
+                # Direct regex extraction for /items/\d+ links
+                if len(listings) < MAX_RESULTS_PER_SITE:
+                    item_ids = re.findall(r'href=["\']/items/(\d+)["\']', html)
+                    for item_id in item_ids:
+                        item_url = f"https://bina.az/items/{item_id}"
+                        if item_url in seen_urls: continue
+                        seen_urls.add(item_url)
+
+                        idx = html.find(f"/items/{item_id}")
+                        snippet = html[max(0, idx - 50):min(len(html), idx + 800)]
+                        alt_match = re.search(r'alt=["\']([^"\'\s>]+.*?)["\']', snippet)
+                        img_match = re.search(r'src=["\'](https://bina\.azstatic\.com/[^"\'\s>]+)["\']', snippet)
+                        price_match = re.search(r'item-card-price-full["\']>([\d\s]+)</span>', snippet) or re.search(r'(\d+[\d\s]*)\s*(?:AZN|azn|manat)', snippet)
+
+                        title_str = alt_match.group(1).strip() if alt_match else f"Bina.az Elanı №{item_id}"
+                        price_str = f"{price_match.group(1).strip()} AZN" if price_match else "Qiymət razılaşma ilə"
+                        img_url = img_match.group(1) if img_match else None
+
+                        listings.append(Listing(
+                            title=title_str[:80], price=price_str,
+                            location=params.metro_station or params.city_region or "Bakı",
+                            rooms=f"{params.rooms} otaqlı" if params.rooms else None,
+                            url=item_url, image_url=img_url, source="bina.az"
+                        ))
+                        if len(listings) >= MAX_RESULTS_PER_SITE:
+                            break
     except Exception as e:
         logger.error(f"Error bina.az: {e}")
     return listings
@@ -613,9 +663,12 @@ def transcribe_audio(audio_path: str | Path) -> str:
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY təyin olunmayıb.")
     client = OpenAI(api_key=OPENAI_API_KEY)
-    with open(audio_path, "rb") as audio_file:
+    file_path = Path(audio_path)
+    with open(file_path, "rb") as audio_file:
         transcript = client.audio.transcriptions.create(
-            model="whisper-1", file=audio_file, language="az",
+            model="whisper-1",
+            file=(file_path.name, audio_file, "audio/ogg"),
+            language="az",
             prompt="Emlak araması: ev satışı, kirayə ev, mənzil, otaq, metro, Bakı, AZN"
         )
     return transcript.text.strip()
@@ -812,7 +865,7 @@ async def process_search_query(update: Update, user_text: str):
         return
 
     await update.message.reply_text(f"✅ <b>Tapılan {len(listings)} ən uyğun elan:</b>", parse_mode=ParseMode.HTML)
-    for listing in listings[:10]:
+    for listing in listings[:20]:
         msg_content = format_listing_message(listing)
         try:
             if listing.image_url:
