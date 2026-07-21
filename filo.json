@@ -1,0 +1,11 @@
+{
+  "ad": "Azerbaycan Emlak Telegram Botu",
+  "kategori": "Telegram Bot / AI Asistan",
+  "ozet": "Azerbaycan'da ev satışı ve kiralaması arayan müşterilerin sesli veya yazılı mesajlarını Whisper ve LLM ile analiz edip tap.az, arenda.az, emlak.az, yeniemlak.az sitelerinden emlak arayan akıllı bot.",
+  "eleme": "LLM ile gelen doğal dil (ses/metin) niyet ve parametrelere (satılıq/kirayə, mənzil/həyət evi, otaq, qiymət, ərazi) dönüştürülür.",
+  "model": "OpenAI Whisper-1 (Ses Tanıma STT) + OpenAI GPT-4o-mini (NLU Parametre Çıkarıcı)",
+  "sunum": "Telegram üzerinden fotoğraflı, detaylı ve ilan linkli kartlar olarak müşteriye sunulur.",
+  "durum": "tamamlandi",
+  "dahil_et": true,
+  "kaynak_notu": "2026-07-21 tarihinde oluşturuldu. Sesli mesaj (STT), metin analizi (NLU) ve 4 emlak portalı scraper (tap.az, arenda.az, emlak.az, yeniemlak.az) modülleri tamamlandı."
+}

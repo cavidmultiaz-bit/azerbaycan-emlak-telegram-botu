@@ -1,0 +1,10 @@
+.env
+anahtar.env
+__pycache__/
+*.pyc
+*.log
+temp_audio/
+*.ogg
+*.wav
+*.mp3
+.venv/
