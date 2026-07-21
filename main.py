@@ -314,62 +314,101 @@ def search_bina_az(params: PropertySearchParams) -> list[Listing]:
     return listings
 
 
+# --- YENIEMLAK METRO MAP ---
+YENIEMLAK_METRO_MAP = {
+    "Həzi Aslanov": 1, "Əhmədli": 2, "Xalqlar Dostluğu": 3, "Neftçilər": 4, "Qara Qarayev": 5,
+    "Koroğlu": 6, "Ulduz": 7, "Nəriman Nərimanov": 8, "Gənclik": 9, "28 May": 10,
+    "Nizami": 11, "Elmlər Akademiyası": 12, "İnşaatçılar": 13, "20 Yanvar": 14, "Memar Əcəmi": 15,
+    "Nəsimi": 16, "Azadlıq Prospekti": 17, "Cəfər Cabbarlı": 18, "Xətai": 19, "Sahil": 20,
+    "İçəri Şəhər": 21, "Bakmil": 22, "Dərnəgül": 23, "Avtovağzal": 24, "8 Noyabr": 25, "Xocəsən": 26
+}
+
 def search_yeniemlak_az(params: PropertySearchParams) -> list[Listing]:
     listings = []
+    headers = DEFAULT_HEADERS.copy()
+    headers["Referer"] = "https://yeniemlak.az/"
+
+    # Try precise parameters first
+    metro_id = YENIEMLAK_METRO_MAP.get(params.metro_station) if params.metro_station else None
+    elan_nov = 2 if params.intent == "kiraye" else (1 if params.intent == "satiliq" else None)
+
+    urls_to_try = []
+    if metro_id:
+        u = f"https://yeniemlak.az/elan/axtar?metro%5B%5D={metro_id}"
+        if elan_nov: u += f"&elan_nov={elan_nov}"
+        if params.rooms: u += f"&otaq={params.rooms}"
+        if params.max_price: u += f"&qiymet2={int(params.max_price)}"
+        urls_to_try.append(u)
+        
+        # Fallback 1: Metro without max price restriction
+        u_broad = f"https://yeniemlak.az/elan/axtar?metro%5B%5D={metro_id}"
+        if elan_nov: u_broad += f"&elan_nov={elan_nov}"
+        urls_to_try.append(u_broad)
+
+    # Keyword search fallback
     search_query = _build_search_query(params)
     encoded = urllib.parse.quote(search_query)
-    url = f"https://yeniemlak.az/elan/axtar?keyword={encoded}"
+    kw_url = f"https://yeniemlak.az/elan/axtar?keyword={encoded}"
+    if elan_nov: kw_url += f"&elan_nov={elan_nov}"
+    urls_to_try.append(kw_url)
 
+    seen_urls = set()
     try:
-        with httpx.Client(headers=DEFAULT_HEADERS, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
-            resp = client.get(url)
-            logger.info(f"yeniemlak.az status: {resp.status_code}")
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                # Multiple selector strategies for yeniemlak.az
-                link_items = soup.select("a[href*='/elan/']")
-                seen_hrefs = set()
+        with httpx.Client(headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
+            for url in urls_to_try:
+                if len(listings) >= MAX_RESULTS_PER_SITE:
+                    break
+                resp = client.get(url)
+                logger.info(f"yeniemlak.az status for {url}: {resp.status_code}")
+                if resp.status_code != 200:
+                    continue
 
-                for link in link_items:
-                    href = link.get("href", "")
-                    if not href or href in seen_hrefs or "/axtar" in href: continue
-                    seen_hrefs.add(href)
-
-                    item_url = href if href.startswith("http") else f"https://yeniemlak.az{href}"
-
-                    # Get text from parent row/card for richer title
-                    parent = link.find_parent("tr") or link.find_parent("div", class_=True) or link.find_parent("li")
-                    title_text = ""
-                    if parent:
-                        title_text = parent.get_text(" ", strip=True)
-                    if not title_text or len(title_text) < 5:
-                        title_text = link.get_text(strip=True)
-                    if not title_text or len(title_text) < 5:
+                html = resp.text
+                table_matches = re.findall(r'<table class="list".*?</table>', html, re.DOTALL | re.IGNORECASE)
+                
+                for t in table_matches:
+                    href_match = re.search(r'href=["\'](/elan/[^"\'\s>]+)["\']', t, re.IGNORECASE)
+                    if not href_match:
                         continue
 
-                    # Truncate overly long titles
-                    title_text = title_text[:120]
+                    href = href_match.group(1)
+                    item_url = f"https://yeniemlak.az{href}"
+                    if item_url in seen_urls:
+                        continue
+                    seen_urls.add(item_url)
 
-                    # Extract price
-                    price = "Qiymət zənglə"
-                    price_match = re.search(r'([\d\s.,]+)\s*(?:AZN|azn|manat)', title_text)
-                    if price_match:
-                        price = price_match.group(0).strip()
+                    price_match = re.search(r'<price>(.*?)</price>', t, re.IGNORECASE)
+                    tip_match = re.search(r'<tip>(.*?)</tip>', t, re.IGNORECASE)
+                    emlak_match = re.search(r'<emlak>(.*?)</emlak>', t, re.IGNORECASE)
+                    img_match = re.search(r'<img[^>]+src=["\']([^"\'\s>]+)["\']', t, re.IGNORECASE)
+                    room_match = re.search(r'<div class="params"><b>(\d+)</b> otaq</div>', t, re.IGNORECASE)
 
-                    img = link.find("img") or (parent.find("img") if parent else None)
-                    img_src = None
-                    if img:
-                        img_src = img.get("src") or img.get("data-src")
-                        if img_src and not img_src.startswith("http"):
-                            img_src = "https://yeniemlak.az" + img_src
+                    price_str = f"{price_match.group(1).strip()} AZN" if (price_match and price_match.group(1).strip()) else "Razılaşma yolu ilə"
+                    tip_str = tip_match.group(1).strip() if tip_match else ("Kirayə" if params.intent == "kiraye" else "Satılır")
+                    emlak_str = emlak_match.group(1).strip() if emlak_match else "Mənzil"
+                    rooms_found = f"{room_match.group(1)} otaqlı" if room_match else (f"{params.rooms} otaqlı" if params.rooms else None)
+
+                    image_url = None
+                    if img_match:
+                        src = img_match.group(1)
+                        image_url = src if src.startswith("http") else f"https://yeniemlak.az{src}"
+
+                    location_str = params.metro_station or params.city_region or "Bakı"
+                    if "nerimanov" in href.lower(): location_str = "Nəriman Nərimanov m."
+                    elif "28-may" in href.lower(): location_str = "28 May m."
+                    elif "genclik" in href.lower(): location_str = "Gənclik m."
+                    elif "ehmedli" in href.lower(): location_str = "Əhmədli m."
+                    elif "neftciler" in href.lower(): location_str = "Neftçilər m."
+
+                    title_str = f"{tip_str} {rooms_found or ''} {emlak_str}".strip()
 
                     listings.append(Listing(
-                        title=title_text,
-                        price=price,
-                        location=params.metro_station or params.city_region or "Bakı",
-                        rooms=f"{params.rooms} otaqlı" if params.rooms else None,
+                        title=title_str,
+                        price=price_str,
+                        location=location_str,
+                        rooms=rooms_found,
                         url=item_url,
-                        image_url=img_src,
+                        image_url=image_url,
                         source="yeniemlak.az"
                     ))
                     if len(listings) >= MAX_RESULTS_PER_SITE:
@@ -666,14 +705,27 @@ async def process_search_query(update: Update, user_text: str):
     await update.message.reply_chat_action(action=ChatAction.TYPING)
     listings = fetch_all_listings(params)
 
+    # Build direct search links for user convenience
+    query_str = urllib.parse.quote(params.metro_station or params.city_region or params.raw_query or user_text)
+    bina_link = f"https://bina.az/items?q={query_str}"
+    tap_link = f"https://tap.az/elanlar/emlak?q%5Bkeywords%5D={query_str}"
+    yeniemlak_link = f"https://yeniemlak.az/elan/axtar?keyword={query_str}"
+
+    portal_links_html = (
+        f"\n🌐 <b>Portallarda canlı axtarış keçidləri:</b>\n"
+        f"• <a href='{yeniemlak_link}'>yeniemlak.az saytında bax</a>\n"
+        f"• <a href='{bina_link}'>bina.az saytında bax</a>\n"
+        f"• <a href='{tap_link}'>tap.az saytında bax</a>"
+    )
+
     if not listings:
         await update.message.reply_text(
-            "😔 <b>Axtarışınıza uyğun elan tapılmadı.</b>\n\n"
+            "😔 <b>Axtarışınıza uyğun ilkin elan tapılmadı.</b>\n\n"
             "💡 <b>Məsləhətlər:</b>\n"
-            "• Qiyməti genişləndirib yenidən yazın\n"
-            "• Ərazini dəyişdirin (məs: metro adı əvəzinə rayon)\n"
-            "• Otaq sayını silərək yenidən axtarış edin",
-            parse_mode=ParseMode.HTML
+            "• Qiymət və ya otaq şərtini biraz genişləndirin\n"
+            f"{portal_links_html}",
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
         )
         return
 
