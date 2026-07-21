@@ -503,6 +503,36 @@ def search_emlak_az(params: PropertySearchParams) -> list[Listing]:
     return listings
 
 
+def check_listing_active(listing: Listing) -> bool:
+    """Verifies if the listing is active by requesting its URL.
+    Returns True if active, False if expired, deleted, or inactive."""
+    headers = DEFAULT_HEADERS.copy()
+    headers["Referer"] = listing.source
+    
+    try:
+        # Short timeout to ensure fast bot response (max 3 seconds)
+        with httpx.Client(headers=headers, timeout=3.0, follow_redirects=True) as client:
+            if "yeniemlak.az" in listing.url:
+                resp = client.get(listing.url)
+                if resp.status_code != 200:
+                    return False
+                text = resp.text
+                # check common indicators of deleted or inactive listings on yeniemlak.az
+                if "mövcud deyil" in text or "mvcud deyil" in text or "silinib" in text or "elan tapılmadı" in text:
+                    return False
+            else:
+                # For bina.az and tap.az, HEAD is sufficient. If they return 404, the listing is inactive
+                resp = client.head(listing.url)
+                if resp.status_code == 405: # Method Not Allowed, fallback to GET
+                    resp = client.get(listing.url)
+                if resp.status_code == 404:
+                    return False
+        return True
+    except Exception as e:
+        logger.warning(f"Verification failed for {listing.url}: {e}")
+        # If the check itself fails (timeout, network issue), assume True to avoid missing valid listings
+        return True
+
 def fetch_all_listings(params: PropertySearchParams) -> list[Listing]:
     scrapers = [
         ("bina.az", search_bina_az),
@@ -526,6 +556,29 @@ def fetch_all_listings(params: PropertySearchParams) -> list[Listing]:
                         all_results.append(item)
             except Exception as e:
                 logger.error(f"Scraper {source} error: {e}")
+                
+    # Concurrently verify all collected listings are active before sending to user
+    active_results = []
+    if all_results:
+        logger.info(f"Verifying {len(all_results)} listings are active...")
+        with ThreadPoolExecutor(max_workers=10) as verifier_executor:
+            future_to_listing = {verifier_executor.submit(check_listing_active, item): item for item in all_results}
+            for future in as_completed(future_to_listing):
+                item = future_to_listing[future]
+                try:
+                    is_active = future.result()
+                    if is_active:
+                        active_results.append(item)
+                    else:
+                        logger.info(f"Filtered out inactive listing: {item.url}")
+                except Exception as e:
+                    logger.warning(f"Error checking active status for {item.url}: {e}")
+                    active_results.append(item)
+                    
+        # Preserve original order of verified active listings
+        ordered_active = [item for item in all_results if item in active_results]
+        return ordered_active
+        
     return all_results
 
 
